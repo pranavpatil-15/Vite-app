@@ -1,0 +1,64 @@
+name: Deploy to Dev (Port 81)
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      # 1️⃣ Checkout latest code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1.1️⃣ Pull latest changes explicitly (force sync to avoid divergence)
+      - name: Pull latest changes
+        working-directory: /home/ubuntu/frontend
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Pulling latest changes from dev branch..."
+          git fetch origin dev
+          git reset --hard origin/dev
+          git clean -fd
+
+      # 2️⃣ Setup Node.js (use system default if unknown)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18  # matches your server, adjust if needed
+
+      # 3️⃣ Install frontend dependencies
+      - name: Install dependencies
+        working-directory: /home/ubuntu/frontend
+        run: |
+          echo "Installing npm dependencies..."
+          npm ci
+
+      # 4️⃣ Build the frontend
+      - name: Build project
+        working-directory: /home/ubuntu/frontend
+        run: |
+          echo "Building frontend..."
+          npm run build
+
+      # 5️⃣ Deploy the build to dev webroot
+      - name: Deploy build to /var/www/app-dev
+        run: |
+          echo "Deleting old dev build..."
+          sudo rm -rf /var/www/app-dev/*
+
+          echo "Copying new dist..."
+          sudo cp -r /home/ubuntu/frontend/dist/* /var/www/app-dev/
+
+          echo "Changing ownership to www-data..."
+          sudo chown -R www-data:www-data /var/www/app-dev
+
+      # 6️⃣ Restart Nginx to reflect changes
+      - name: Restart Nginx
+        run: |
+          echo "Restarting Nginx..."
+          sudo systemctl restart nginx
